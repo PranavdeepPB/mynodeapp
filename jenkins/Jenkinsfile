@@ -1,0 +1,85 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_IMAGE     = "pranavdeeppb/mynodeapp"
+        DOCKER_TAG       = "${BUILD_NUMBER}"
+        EC2_HOST         = "ubuntu@65.0.18.20"
+        EC2_SSH_KEY      = credentials('ec2-ssh-key')       
+        DOCKER_HUB_CREDS = credentials('dockerhub-creds')   
+    }
+
+    stages {
+
+       stage('Checkout') {
+           steps {
+               echo 'Pulling code from GitHub...'
+               git branch: 'master',
+               url: 'https://github.com/PranavdeepPB/mynodeapp.git',
+               credentialsId: 'github-creds'
+        }
+    }
+
+        stage('Build') {
+            steps {
+                echo 'Building Docker image...'
+                sh """
+                    docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ./app
+                    docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
+                """
+            }
+        }
+
+        stage('Push') {
+            steps {
+                echo 'Pushing image to Docker Hub...'
+                sh """
+                    echo ${DOCKER_HUB_CREDS_PSW} | docker login -u ${DOCKER_HUB_CREDS_USR} --password-stdin
+                    docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                    docker push ${DOCKER_IMAGE}:latest
+                """
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo 'Deploying to EC2...'
+                sh """
+                    ssh -o StrictHostKeyChecking=no -i ${EC2_SSH_KEY} ${EC2_HOST} '
+                        docker pull ${DOCKER_IMAGE}:latest &&
+                        docker stop mynodeapp || true &&
+                        docker rm   mynodeapp || true &&
+                        docker run -d \
+                            --name mynodeapp \
+                            --restart always \
+                            -p 3000:3000 \
+                            ${DOCKER_IMAGE}:latest
+                    '
+                """
+            }
+        }
+        stage('Health Check') {
+            steps {
+                echo ' Verifying deployment...'
+                sh """
+                    sleep 5
+                    ssh -o StrictHostKeyChecking=no -i ${EC2_SSH_KEY} ${EC2_HOST} \
+                        'curl -sf http://localhost:3000/health || exit 1'
+                """
+                echo 'App is live!'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline succeeded! App running at http://${EC2_HOST}:3000"
+        }
+        failure {
+            echo "Pipeline failed at stage: ${CURRENT_STAGE}"
+        }
+        always {
+            sh "docker rmi ${DOCKER_IMAGE}:${DOCKER_TAG} || true"
+        }
+    }
+}
