@@ -1,0 +1,12 @@
+{
+  "name": "number-guessing-game",
+  "version": "1.0.0",
+  "description": "A simple number guessing game web app built with Node.js",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": ["game", "nodejs", "web"],
+  "author": "",
+  "license": "ISC"
+}
