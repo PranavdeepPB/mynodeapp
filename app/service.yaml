@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mynodeapp-service
+  labels:
+    app: mynodeapp
+spec:
+  type: LoadBalancer       # Use NodePort if you don't have a cloud load balancer
+  selector:
+    app: mynodeapp
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80             # External port (what users hit)
+      targetPort: 3000     # Internal container port
